@@ -53,18 +53,23 @@ async function ensurePermissionInteractive() {
   }
   return true;
 }
+
+const ICON_URL = new URL('assets/img/icon.png', document.baseURI).href;
+
 function notifyPlateTime(plate, eta) {
   const title = 'єЧерга';
   const body  = `🚚 ${plate || '—'}\n⏰ ${eta || '—'}`;
   try {
     const n = new Notification(title, {
-      body, 
-      tag:'echerha-watch', 
-      renotify:true, 
-      icon: 'assets/img/icon.png'
+      body,
+      tag: 'echerha-watch',
+      renotify: true,
+      icon: ICON_URL
     });
     n.onclick = () => { window.focus(); n.close(); };
-  } catch (e) { alert(`${title}\n\n${body}`); }
+  } catch (e) {
+    alert(`${title}\n\n${body}`);
+  }
 }
 
 /* ——— FETCH з ретраями/бекоффом (403/429) і зрозумілим текстом помилки ——— */
