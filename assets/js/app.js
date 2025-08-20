@@ -61,7 +61,7 @@ function notifyPlateTime(plate, eta) {
       body, 
       tag:'echerha-watch', 
       renotify:true, 
-      icon: '../img/icon.png'
+      icon: 'assets/img/icon.png'
     });
     n.onclick = () => { window.focus(); n.close(); };
   } catch (e) { alert(`${title}\n\n${body}`); }
