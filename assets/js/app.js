@@ -2,6 +2,8 @@
 const PROXY_URL = 'https://gentle-fire-c156.epiktet501.workers.dev';
 const DIR = 1, CATEGORY = 1, DAYS = 30;
 
+
+
 /* 1) СПИСОК КПП (порядок важливий — перший збіг виграє) */
 const CHECKPOINTS = [
   { id: 88, name: 'Грушів – Будомєж (для вантажівок ≤ 7,5 тонн)' },
