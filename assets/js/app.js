@@ -2,8 +2,6 @@
 const PROXY_URL = 'https://gentle-fire-c156.epiktet501.workers.dev';
 const DIR = 1, CATEGORY = 1, DAYS = 30;
 
-
-
 /* 1) СПИСОК КПП (порядок важливий — перший збіг виграє) */
 const CHECKPOINTS = [
   { id: 88, name: 'Грушів – Будомєж (для вантажівок ≤ 7,5 тонн)' },
@@ -29,6 +27,21 @@ const CHECKPOINTS = [
   { id: 97, name: 'Чоп (Тиса) – Захонь (для порожніх вантажівок ≥ 3,5 тонн)' },
 ];
 
+const CYR_TO_LAT_PLATE_MAP = {
+  'А': 'A',
+  'В': 'B',
+  'Е': 'E',
+  'І': 'I',
+  'К': 'K',
+  'М': 'M',
+  'Н': 'H',
+  'О': 'O',
+  'Р': 'P',
+  'С': 'C',
+  'Т': 'T',
+  'Х': 'X'
+};
+
 /* Стан */
 let loopHandle = null;       // заміна setInterval → самопланувальник
 let lastKeyMap = {};         // ключ: `${plate}|${cpId}` → JSON.stringify({...})
@@ -38,13 +51,22 @@ let selectedCheckpointName = '';
 /* Утиліти */
 const $ = (id) => document.getElementById(id);
 const setStatus = (msg, cls='') => { $('status').className = 'muted ' + cls; $('status').textContent = msg; };
-const normPlate = (p) => (p || '').replace(/\s+/g, '').toUpperCase();
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 function apiUrl(plate, checkpointId, page=1) {
   const base = `https://back.echerha.gov.ua/api/v4/workload/${DIR}/checkpoints/${checkpointId}/details/${CATEGORY}/${DAYS}`;
   const params = new URLSearchParams({ page, plate_number: plate });
   return `${base}?${params.toString()}`;
+}
+
+function normPlate(value) {
+  return (value || '')
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .split('')
+    .map(ch => CYR_TO_LAT_PLATE_MAP[ch] || ch)
+    .join('')
+    .replace(/[^A-Z0-9]/g, '');
 }
 
 async function ensurePermissionInteractive() {
@@ -206,8 +228,13 @@ async function loop(plate, cpId) {
 
 /* === Старт/Стоп з автопошуком КПП === */
 async function startPolling() {
-  const plate = $('plate').value.trim();
-  if (!plate) { setStatus('Введи номер авто', 'warn'); return; }
+  const plate = normPlate($('plate').value);
+  $('plate').value = plate;
+
+  if (!plate) {
+    setStatus('Введи номер авто', 'warn');
+    return;
+  }
   const ok = await ensurePermissionInteractive(); if (!ok) return;
 
   // Зберігаємо вибір користувача
@@ -242,6 +269,11 @@ function stopPolling(){
 $('start').onclick = startPolling;
 $('stop').onclick  = stopPolling;
 
+$('plate').addEventListener('input', function () {
+  const normalized = normPlate(this.value);
+  this.value = normalized;
+});
+
 // тестова нотифікація у футері
 const testBtn = document.getElementById('testNotif');
 if (testBtn) {
@@ -255,7 +287,7 @@ if (testBtn) {
 }
 
 /* Відновлення налаштувань */
-$('plate').value = localStorage.getItem('ech_plate') || '';
+$('plate').value = normPlate(localStorage.getItem('ech_plate') || '');
 $('interval').value = localStorage.getItem('ech_interval') || '180';
 $('pingEvery').value = localStorage.getItem('ech_pingEvery') || '5';
 
