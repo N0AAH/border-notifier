@@ -8,7 +8,8 @@
   <title>єЧерга — сповіщення за номером</title>
 </head>
 <body>
-  <div class="card">
+  <div class="app-shell">
+    <div class="card">
     <div class="hdr">
       <div class="title">
         <div class="logo"><img class="logo" src="assets/img/logo.png" alt="">
@@ -60,30 +61,32 @@
         <button id="helpBtn" class="help-btn" aria-haspopup="dialog" aria-controls="helpModal" aria-expanded="false" title="Інструкція">?</button>
       </div>
     </div>
-</div>
-
-<!-- Модальне вікно: інструкція -->
-<div id="helpModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" hidden>
-  <div id="helpDialog" class="dialog" tabindex="-1">
-    <div class="head">
-      <h2 id="helpTitle">Як користуватись</h2>
-      <button id="helpClose" class="close-btn" aria-label="Закрити">Закрити</button>
     </div>
-    <div class="body">
-      <ul>
-        <li><b>Дозвольте сповіщення</b> у браузері при першому запуску <b>(на весь час роботи додатку - вкладка повинна бути відкритою)</b></li>
-        <li>Введіть <b>номер авто латиницею</b> у відповідне поле.</li>
-        <li>Оберіть, <b>як часто отримувати дані з сервера </b></li>
-        <li>Оберіть, <b>як часто показувати сповіщення</b> (сповіщення будуть відображатися в правому нижньому куті екрана) </li>
-        <li>Натисніть <b>Старт</b>. Програма знайде на якому КПП зарєестрований автомобіль і почне моніторинг.</li>
-        <li>Натисніть <b>Стоп</b>, щоб зупинити моніторинг.</li>
-      </ul>
-      <div class="note">
-        Налаштування зберігаються навіть після оновлення сторінки.
+  </div>
+
+
+  <!-- Модальне вікно: інструкція -->
+  <div id="helpModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" hidden>
+    <div id="helpDialog" class="dialog" tabindex="-1">
+      <div class="head">
+        <h2 id="helpTitle">Як користуватись</h2>
+        <button id="helpClose" class="close-btn" aria-label="Закрити">Закрити</button>
+      </div>
+      <div class="body">
+        <ul>
+          <li><b>Дозвольте сповіщення</b> у браузері при першому запуску <b>(на весь час роботи додатку - вкладка повинна бути відкритою)</b></li>
+          <li>Введіть <b>номер авто латиницею</b> у відповідне поле.</li>
+          <li>Оберіть, <b>як часто отримувати дані з сервера </b></li>
+          <li>Оберіть, <b>як часто показувати сповіщення</b> (сповіщення будуть відображатися в правому нижньому куті екрана) </li>
+          <li>Натисніть <b>Старт</b>. Програма знайде на якому КПП зарєестрований автомобіль і почне моніторинг.</li>
+          <li>Натисніть <b>Стоп</b>, щоб зупинити моніторинг.</li>
+        </ul>
+        <div class="note">
+          Налаштування зберігаються навіть після оновлення сторінки.
+        </div>
       </div>
     </div>
   </div>
-</div>
 
 <script src="assets/js/app.js"></script>
 </body>
