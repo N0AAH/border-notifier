@@ -59,9 +59,16 @@ function createWatcher(initial = {}) {
     pingEvery: String(initial.pingEvery || '5'),
     checkpointId: initial.checkpointId || null,
     checkpointName: initial.checkpointName || '',
+    tabLabel: initial.tabLabel || '',
+    tabLabelLocked: Boolean(initial.tabLabelLocked),
     lastKey: initial.lastKey || '',
     pingCounter: Number(initial.pingCounter || 0),
-    fields: initial.fields || [],
+    fields: initial.fields || [
+      ['Пункт пропуску', '—'],
+      ['Номер авто', '—'],
+      ['Реєстрація в черзі', '—'],
+      ['Орієнтовний час заїзду на кордон', '—'],
+    ],
     status: initial.status || 'Введіть номер авто, задайте параметри сповіщень та натисніть "Старт"',
     statusClass: initial.statusClass || '',
     isRunning: Boolean(initial.isRunning),
@@ -77,6 +84,8 @@ function saveWatchers() {
     pingEvery: w.pingEvery,
     checkpointId: w.checkpointId,
     checkpointName: w.checkpointName,
+    tabLabel: w.tabLabel,
+    tabLabelLocked: w.tabLabelLocked,
     lastKey: w.lastKey,
     pingCounter: w.pingCounter,
     fields: w.fields,
@@ -171,7 +180,11 @@ function setWatcherFields(id, pairs) {
 }
 
 function watcherDisplayTitle(watcher) {
-  return watcher.plate || 'Нове авто';
+  if (watcher.tabLabelLocked) {
+    return watcher.tabLabel || 'Нове авто';
+  }
+
+  return watcher.tabLabel || watcher.plate || 'Нове авто';
 }
 
 function normPlate(value) {
@@ -401,16 +414,21 @@ async function startWatcher(watcherId) {
     return;
   }
 
-  watcher.checkpointId = found.id;
-  watcher.checkpointName = found.name || String(found.id);
-  watcher.lastKey = '';
-  watcher.pingCounter = 0;
-  watcher.isRunning = true;
+watcher.checkpointId = found.id;
+watcher.checkpointName = found.name || String(found.id);
+watcher.lastKey = '';
+watcher.pingCounter = 0;
+watcher.isRunning = true;
 
-  if (watcher.loopHandle) {
-    clearTimeout(watcher.loopHandle);
-    watcher.loopHandle = null;
-  }
+if (!watcher.tabLabelLocked) {
+  watcher.tabLabel = watcher.plate;
+  watcher.tabLabelLocked = true;
+}
+
+if (watcher.loopHandle) {
+  clearTimeout(watcher.loopHandle);
+  watcher.loopHandle = null;
+}
 
   saveWatchers();
   renderApp();
@@ -441,13 +459,32 @@ function stopWatcher(watcherId) {
 
 function renderTabsHtml() {
   return watchers.map(watcher => `
-    <button
+    <div
       class="tab-btn ${watcher.id === activeWatcherId ? 'active' : ''}"
       data-tab-id="${watcher.id}"
-      type="button"
+      role="tab"
+      tabindex="0"
     >
-      ${watcherDisplayTitle(watcher)}
-    </button>
+      <span class="tab-btn-label" title="Подвійний клік, щоб перейменувати">${watcherDisplayTitle(watcher)}</span>
+      <button
+        class="tab-edit-btn"
+        data-edit-tab-id="${watcher.id}"
+        type="button"
+        title="Перейменувати таб"
+        aria-label="Перейменувати таб ${watcherDisplayTitle(watcher)}"
+      >
+        ✎
+      </button>
+      <button
+        class="tab-delete-btn"
+        data-delete-tab-id="${watcher.id}"
+        type="button"
+        title="Видалити авто"
+        aria-label="Видалити авто ${watcherDisplayTitle(watcher)}"
+      >
+        ✕
+      </button>
+    </div>
   `).join('');
 }
 
@@ -469,85 +506,82 @@ function renderCard() {
     return;
   }
 
-  host.innerHTML = `
-    <div class="card-shell">
-      <div class="card">
-        <div class="card-tabs">
-          <div class="tabs">
-            ${renderTabsHtml()}
+host.innerHTML = `
+  <div class="card-shell">
+    <div class="card-tabs">
+      <div class="tabs">
+        ${renderTabsHtml()}
+      </div>
+      <button id="addWatcherBtn" class="tab-add-btn" title="Додати авто" type="button">+</button>
+    </div>
+
+    <div class="card">
+      <div class="card-topbar">
+        <div class="card-plate-title">${watcher.plate || 'Нове авто'}</div>
+      </div>
+
+      <div class="hdr">
+        <div class="title">
+          <div class="logo">
+            <img class="logo" src="assets/img/logo.png" alt="">
           </div>
-          <button id="addWatcherBtn" class="tab-add-btn" title="Додати авто" type="button">+</button>
         </div>
 
-        <div class="card-topbar">
-          <div class="card-plate-title">${watcherDisplayTitle(watcher)}</div>
-          <div class="card-topbar-actions">
-            <button id="deleteWatcherBtn" class="small-btn" title="Видалити авто" type="button">🗑</button>
-          </div>
-        </div>
+        <div class="controls">
+          <label>
+            <h3>Введіть номер тягача або автомобіля (латиницею)</h3>
+            <input id="plateInput" value="${watcher.plate}" size="14"/>
+          </label>
 
-        <div class="hdr">
-          <div class="title">
-            <div class="logo">
-              <img class="logo" src="assets/img/logo.png" alt="">
+          <label>
+            <h3>Як часто робити запит</h3>
+            <div class="select-wrap">
+              <select id="intervalInput" title="Як часто опитувати API">
+                <option value="60" ${watcher.interval === '60' ? 'selected' : ''}>Щохвилини</option>
+                <option value="180" ${watcher.interval === '180' ? 'selected' : ''}>Кожні 3 хв</option>
+                <option value="300" ${watcher.interval === '300' ? 'selected' : ''}>Кожні 5 хв</option>
+              </select>
             </div>
-          </div>
+          </label>
 
-          <div class="controls">
-            <label>
-              <h3>Введіть номер тягача або автомобіля (латиницею)</h3>
-              <input id="plateInput" value="${watcher.plate}" size="14"/>
-            </label>
-
-            <label>
-              <h3>Як часто робити запит</h3>
-              <div class="select-wrap">
-                <select id="intervalInput" title="Як часто опитувати API">
-                  <option value="60" ${watcher.interval === '60' ? 'selected' : ''}>Щохвилини</option>
-                  <option value="180" ${watcher.interval === '180' ? 'selected' : ''}>Кожні 3 хв</option>
-                  <option value="300" ${watcher.interval === '300' ? 'selected' : ''}>Кожні 5 хв</option>
-                </select>
-              </div>
-            </label>
-
-            <label>
-              <h3>Як часто показувати сповіщення</h3>
-              <div class="select-wrap">
-                <select id="pingEveryInput" title="Нагадувати без змін кожні N перевірок">
-                  <option value="3" ${watcher.pingEvery === '3' ? 'selected' : ''}>Нагадувати кожні 3 перевірки</option>
-                  <option value="5" ${watcher.pingEvery === '5' ? 'selected' : ''}>Нагадувати кожні 5 перевірок</option>
-                  <option value="10" ${watcher.pingEvery === '10' ? 'selected' : ''}>Нагадувати кожні 10 перевірок</option>
-                </select>
-              </div>
-            </label>
-
-            <div class="buttons">
-              <button id="startBtn" type="button">Старт</button>
-              <button id="stopBtn" class="secondary" type="button">Стоп</button>
+          <label>
+            <h3>Як часто показувати сповіщення</h3>
+            <div class="select-wrap">
+              <select id="pingEveryInput" title="Нагадувати без змін кожні N перевірок">
+                <option value="3" ${watcher.pingEvery === '3' ? 'selected' : ''}>Нагадувати кожні 3 перевірки</option>
+                <option value="5" ${watcher.pingEvery === '5' ? 'selected' : ''}>Нагадувати кожні 5 перевірок</option>
+                <option value="10" ${watcher.pingEvery === '10' ? 'selected' : ''}>Нагадувати кожні 10 перевірок</option>
+              </select>
             </div>
-          </div>
-        </div>
+          </label>
 
-        <div class="wrap">
-          <div class="pane">
-            <div class="ph">Дані по авто</div>
-            <div id="fieldsBox">${renderFieldsHtml(watcher.fields)}</div>
-          </div>
-        </div>
-
-        <div class="foot">
-          <div id="statusBox" class="muted ${watcher.statusClass || ''}">
-            ${watcher.status}
-          </div>
-
-          <div class="foot-actions">
-            <button id="testNotifBtn" class="tiny-btn" title="Показати тестову нотифікацію" type="button">🔔</button>
-            <button id="helpBtn" class="help-btn" aria-haspopup="dialog" aria-controls="helpModal" aria-expanded="false" title="Інструкція" type="button">?</button>
+          <div class="buttons">
+            <button id="startBtn" type="button">Старт</button>
+            <button id="stopBtn" class="secondary" type="button">Стоп</button>
           </div>
         </div>
       </div>
+
+      <div class="wrap">
+        <div class="pane">
+          <div class="ph">Дані по авто</div>
+          <div id="fieldsBox">${renderFieldsHtml(watcher.fields)}</div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <div id="statusBox" class="muted ${watcher.statusClass || ''}">
+          ${watcher.status}
+        </div>
+
+        <div class="foot-actions">
+          <button id="testNotifBtn" class="tiny-btn" title="Показати тестову нотифікацію" type="button">🔔</button>
+          <button id="helpBtn" class="help-btn" aria-haspopup="dialog" aria-controls="helpModal" aria-expanded="false" title="Інструкція" type="button">?</button>
+        </div>
+      </div>
     </div>
-  `;
+  </div>
+`;
 
   bindCardEvents(watcher.id);
 }
@@ -561,15 +595,128 @@ function bindCardEvents(watcherId) {
   const pingEveryInput = $('pingEveryInput');
   const startBtn = $('startBtn');
   const stopBtn = $('stopBtn');
-  const deleteBtn = $('deleteWatcherBtn');
   const testNotifBtn = $('testNotifBtn');
   const helpBtn = $('helpBtn');
   const addWatcherBtn = $('addWatcherBtn');
 
-  document.querySelectorAll('[data-tab-id]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const tabId = btn.getAttribute('data-tab-id');
+  document.querySelectorAll('[data-tab-id]').forEach(tab => {
+    tab.addEventListener('click', (e) => {
+      if (e.target.closest('[data-delete-tab-id]')) return;
+      if (e.target.closest('[data-edit-tab-id]')) return;
+
+      const tabId = tab.getAttribute('data-tab-id');
       setActiveWatcher(tabId);
+    });
+
+    tab.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      if (e.target.closest('[data-delete-tab-id]')) return;
+
+      e.preventDefault();
+      const tabId = tab.getAttribute('data-tab-id');
+      setActiveWatcher(tabId);
+    });
+  });
+
+document.querySelectorAll('[data-edit-tab-id]').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+
+    const tabId = btn.getAttribute('data-edit-tab-id');
+    const tab = document.querySelector(`[data-tab-id="${tabId}"]`);
+    const labelEl = tab?.querySelector('.tab-btn-label');
+    const freshWatcher = getWatcher(tabId);
+
+    if (!tab || !labelEl || !freshWatcher) return;
+    if (tab.querySelector('.tab-label-input')) return;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'tab-label-input';
+    input.value = freshWatcher.tabLabel || '';
+    input.maxLength = 40;
+
+    let closed = false;
+
+    const cleanup = () => {
+      document.removeEventListener('pointerdown', handleOutsideClick, true);
+    };
+
+    const commit = () => {
+      if (closed) return;
+      closed = true;
+
+      const currentWatcher = getWatcher(tabId);
+      if (!currentWatcher) {
+        cleanup();
+        input.remove();
+        return;
+      }
+
+      currentWatcher.tabLabel =
+        input.value.trim() || currentWatcher.tabLabel || currentWatcher.plate || 'Нове авто';
+
+      currentWatcher.tabLabelLocked = true;
+
+      saveWatchers();
+
+      labelEl.textContent = watcherDisplayTitle(currentWatcher);
+      labelEl.hidden = false;
+      cleanup();
+      input.remove();
+    };
+
+    const cancel = () => {
+      if (closed) return;
+      closed = true;
+
+      labelEl.hidden = false;
+      cleanup();
+      input.remove();
+    };
+
+    const stopInputEvent = (ev) => {
+      ev.stopPropagation();
+    };
+
+    const handleOutsideClick = (ev) => {
+      if (ev.target === input) return;
+      commit();
+    };
+
+    input.addEventListener('pointerdown', stopInputEvent);
+    input.addEventListener('mousedown', stopInputEvent);
+    input.addEventListener('click', stopInputEvent);
+
+    input.addEventListener('keydown', (ev) => {
+      ev.stopPropagation();
+
+      if (ev.key === 'Enter') {
+        commit();
+        return;
+      }
+
+      if (ev.key === 'Escape') {
+        cancel();
+      }
+    });
+
+    labelEl.hidden = true;
+    labelEl.insertAdjacentElement('afterend', input);
+
+    setTimeout(() => {
+      document.addEventListener('pointerdown', handleOutsideClick, true);
+      input.focus();
+      input.select();
+    }, 0);
+  });
+});
+
+  document.querySelectorAll('[data-delete-tab-id]').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const tabId = btn.getAttribute('data-delete-tab-id');
+      removeWatcher(tabId);
     });
   });
 
@@ -579,18 +726,38 @@ function bindCardEvents(watcherId) {
     watcher.plate = normPlate(plateInput.value);
     plateInput.value = watcher.plate;
 
-    // оновлюємо тільки те, що потрібно, без ре-рендеру
-    const titleEl = document.querySelector('.card-plate-title');
-    if (titleEl) {
-      titleEl.textContent = watcherDisplayTitle(watcher);
+    if (!watcher.tabLabelLocked) {
+      watcher.tabLabel = watcher.plate;
     }
 
-    const activeTab = document.querySelector(`[data-tab-id="${watcher.id}"]`);
-    if (activeTab) {
-      activeTab.textContent = watcherDisplayTitle(watcher);
+    const titleEl = document.querySelector('.card-plate-title');
+    if (titleEl) {
+      titleEl.textContent = watcher.plate || 'Нове авто';
+    }
+
+    const activeTabLabel = document.querySelector(
+      `[data-tab-id="${watcher.id}"] .tab-btn-label`
+    );
+    if (activeTabLabel) {
+      activeTabLabel.textContent = watcherDisplayTitle(watcher);
+    }
+
+    const activeTabDeleteBtn = document.querySelector(
+      `[data-delete-tab-id="${watcher.id}"]`
+    );
+    if (activeTabDeleteBtn) {
+      activeTabDeleteBtn.setAttribute(
+        'aria-label',
+        `Видалити авто ${watcherDisplayTitle(watcher)}`
+      );
     }
 
     saveWatchers();
+  });
+
+  document.querySelectorAll('[data-tab-id]').forEach(tab => {
+    const labelEl = tab.querySelector('.tab-btn-label');
+    if (!labelEl) return;
   });
 
   intervalInput.addEventListener('change', () => {
@@ -606,10 +773,6 @@ function bindCardEvents(watcherId) {
   startBtn.addEventListener('click', () => startWatcher(watcherId));
   stopBtn.addEventListener('click', () => stopWatcher(watcherId));
 
-  deleteBtn.addEventListener('click', () => {
-    removeWatcher(watcherId);
-  });
-
   testNotifBtn.addEventListener('click', async () => {
     const ok = await ensurePermissionInteractive();
     if (!ok) {
@@ -622,6 +785,17 @@ function bindCardEvents(watcherId) {
 
   helpBtn.addEventListener('click', openHelp);
 }
+
+
+
+
+// ///////////////////
+
+
+
+
+
+
 
 function renderApp() {
   renderCard();
