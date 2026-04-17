@@ -22,7 +22,12 @@ html, body{
 }
 
 body{
-    background: radial-gradient(1200px 600px at 15% -10%, #323743 0, #5773ab 60%);
+        background: linear-gradient(
+    180deg,
+    #0b1220 0%,
+    #0e1525 50%,
+    #0b1324 100%
+  );
     color:var(--fg);
     font:14px/1.55 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial,sans-serif;
     overflow:hidden;
@@ -46,7 +51,7 @@ body{
 .card{
   width:100%;
   background:var(--card);
-  /* border:1px solid var(--stroke); */
+  border:1px solid var(--stroke);
   border-radius:18px;
   box-shadow:0 25px 20px rgba(0, 0, 0, 0.5);
   overflow:visible;
@@ -56,9 +61,9 @@ body{
 
 .card-tabs{
   position:absolute;
-  top:0;
+  top:-8px;
   left:16px;
-  right:15px;
+  right:16px;
   display:flex;
   align-items:flex-end;
   gap:4px;
@@ -73,6 +78,7 @@ body{
   flex:0 1 auto;
   min-width:0;
   flex-wrap:nowrap;
+  overflow:hidden;
 }
 
 
@@ -97,10 +103,10 @@ body{
 .tab-btn{
   flex:0 1 auto;
   min-width:0;
-  width:auto;
-  height:46px;
-  padding:0 8px 8px 8px;
-  border-radius:8px 8px 0 0;
+  max-width:none;
+  height:54px;
+  padding:0 12px 10px; 
+  border-radius:12px 12px 0 0;
   background:#26324b;
   color:var(--muted);
   font-weight:700;
@@ -109,11 +115,12 @@ body{
   display:flex;
   align-items:center;
   justify-content:flex-start;
-  gap:2px;
+  gap:6px;
+  border:1px solid var(--stroke);
 }
 
 .tab-btn:hover{
-  /* background:#162443; */
+  background:#1c2436;
   color:var(--fg);
 }
 
@@ -121,12 +128,13 @@ body{
   background:var(--card);
   color:#fff;
   /* border-color:var(--stroke); */
+  background-color: #142e55;
   z-index:5;
    box-shadow:none;
 }
 
 .tab-btn-label{
-  flex:0 1 auto;
+  flex:1 1 auto;
   min-width:0;
   overflow:hidden;
   text-overflow:ellipsis;
@@ -138,9 +146,9 @@ body{
 
 .tab-edit-btn,
 .tab-delete-btn{
-  display:flex;
+  /* display:flex;
   align-items:center;
-  justify-content:center;
+  justify-content:center; */
   opacity:0.7;
 }
 
@@ -174,8 +182,8 @@ body{
   border-radius:999px;
   background:transparent;
   color:var(--muted);
-font-size:12px;      /* вирівнюємо з edit */
-line-height:22px;    /* = height */
+  font-size:12px;      /* вирівнюємо з edit */
+  line-height:22px;    /* = height */
   display:flex;
   align-items:center;
   justify-content:center;
@@ -193,17 +201,17 @@ line-height:22px;    /* = height */
 }
 
 .tab-add-btn{
-  flex:0 0 40px;
-  width:40px;
-  min-width:40px;
-  height:40px;
-  padding: 7px 0px 12px;
+  flex:0 0 48px;
+  width:48px;
+  min-width:48px;
+  height:48px;
+  padding: 0px 0px 1px;
   /* border:1px solid var(--stroke); */
   border-bottom:none;
   border-radius:5px 5px 0 0;
   font-size:25px;
   line-height:1;
-  background:rgba(16, 40, 76, 0);
+  background:rgba(1, 37, 92, 0);
   color:#fff;
   cursor:pointer;
   margin-bottom: 5px;
@@ -211,7 +219,7 @@ line-height:22px;    /* = height */
 
 .tab-add-btn:hover{
   /* background:rgb(23, 54, 100); */
-  background:rgba(97, 132, 163, 0.39);
+  background:rgba(100, 124, 146, 0.233);
 }
 
 .card-topbar{
@@ -248,7 +256,7 @@ line-height:22px;    /* = height */
     display:flex; 
     padding:16px 18px; 
     border-bottom:1px solid var(--stroke);
-    background:#0b1324; 
+    background:#0e1525; 
 }
 
 .hdr h3 {
