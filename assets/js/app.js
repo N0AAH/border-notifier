@@ -1,8 +1,6 @@
-/* === Автопошук КПП за номером → далі моніторинг як раніше === */
 const PROXY_URL = 'https://gentle-fire-c156.epiktet501.workers.dev';
 const DIR = 1, CATEGORY = 1, DAYS = 30;
 
-/* 1) СПИСОК КПП (порядок важливий — перший збіг виграє) */
 const CHECKPOINTS = [
   { id: 88, name: 'Грушів – Будомєж (для вантажівок ≤ 7,5 тонн)' },
   { id: 6,  name: 'Краківець – Корчова (для вантажівок ≥ 7,5 тонн)' },
@@ -42,21 +40,138 @@ const CYR_TO_LAT_PLATE_MAP = {
   'Х': 'X'
 };
 
-/* Стан */
-let loopHandle = null;       // заміна setInterval → самопланувальник
-let lastKeyMap = {};         // ключ: `${plate}|${cpId}` → JSON.stringify({...})
-let selectedCheckpointId = null;
-let selectedCheckpointName = '';
+const ICON_URL = new URL('assets/img/icon.png', document.baseURI).href;
+const STORAGE_KEY = 'ech_watchers_v1';
+const ACTIVE_TAB_KEY = 'ech_active_watcher_id';
 
-/* Утиліти */
 const $ = (id) => document.getElementById(id);
-const setStatus = (msg, cls='') => { $('status').className = 'muted ' + cls; $('status').textContent = msg; };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-function apiUrl(plate, checkpointId, page=1) {
-  const base = `https://back.echerha.gov.ua/api/v4/workload/${DIR}/checkpoints/${checkpointId}/details/${CATEGORY}/${DAYS}`;
-  const params = new URLSearchParams({ page, plate_number: plate });
-  return `${base}?${params.toString()}`;
+let watchers = [];
+let activeWatcherId = null;
+
+function createWatcher(initial = {}) {
+  const id = initial.id || crypto.randomUUID();
+  return {
+    id,
+    plate: initial.plate || '',
+    interval: String(initial.interval || '180'),
+    pingEvery: String(initial.pingEvery || '5'),
+    checkpointId: initial.checkpointId || null,
+    checkpointName: initial.checkpointName || '',
+    lastKey: initial.lastKey || '',
+    pingCounter: Number(initial.pingCounter || 0),
+    fields: initial.fields || [],
+    status: initial.status || 'Введіть номер авто, задайте параметри сповіщень та натисніть "Старт"',
+    statusClass: initial.statusClass || '',
+    isRunning: Boolean(initial.isRunning),
+    loopHandle: null
+  };
+}
+
+function saveWatchers() {
+  const serializable = watchers.map(w => ({
+    id: w.id,
+    plate: w.plate,
+    interval: w.interval,
+    pingEvery: w.pingEvery,
+    checkpointId: w.checkpointId,
+    checkpointName: w.checkpointName,
+    lastKey: w.lastKey,
+    pingCounter: w.pingCounter,
+    fields: w.fields,
+    status: w.status,
+    statusClass: w.statusClass,
+    isRunning: w.isRunning
+  }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(serializable));
+  if (activeWatcherId) {
+    localStorage.setItem(ACTIVE_TAB_KEY, activeWatcherId);
+  }
+}
+
+function loadWatchers() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    watchers = raw.map(item => createWatcher(item));
+  } catch {
+    watchers = [];
+  }
+
+  if (!watchers.length) {
+    watchers = [createWatcher()];
+  }
+
+  const savedActive = localStorage.getItem(ACTIVE_TAB_KEY);
+  activeWatcherId = watchers.some(w => w.id === savedActive) ? savedActive : watchers[0].id;
+}
+
+function getWatcher(id) {
+  return watchers.find(w => w.id === id) || null;
+}
+
+function getActiveWatcher() {
+  return getWatcher(activeWatcherId);
+}
+
+function setActiveWatcher(id) {
+  if (!getWatcher(id)) return;
+  activeWatcherId = id;
+  saveWatchers();
+  renderApp();
+}
+
+function addWatcher() {
+  const watcher = createWatcher();
+  watchers.push(watcher);
+  activeWatcherId = watcher.id;
+  saveWatchers();
+  renderApp();
+}
+
+function removeWatcher(id) {
+  const watcher = getWatcher(id);
+  if (!watcher) return;
+
+  stopWatcher(id);
+
+  watchers = watchers.filter(w => w.id !== id);
+
+  if (!watchers.length) {
+    watchers = [createWatcher()];
+  }
+
+  if (!watchers.some(w => w.id === activeWatcherId)) {
+    activeWatcherId = watchers[0].id;
+  }
+
+  saveWatchers();
+  renderApp();
+}
+
+function setWatcherStatus(id, msg, cls = '') {
+  const watcher = getWatcher(id);
+  if (!watcher) return;
+  watcher.status = msg;
+  watcher.statusClass = cls;
+  saveWatchers();
+  if (watcher.id === activeWatcherId) {
+    renderCard();
+  }
+}
+
+function setWatcherFields(id, pairs) {
+  const watcher = getWatcher(id);
+  if (!watcher) return;
+  watcher.fields = pairs;
+  saveWatchers();
+  if (watcher.id === activeWatcherId) {
+    renderCard();
+  }
+}
+
+function watcherDisplayTitle(watcher) {
+  return watcher.plate || 'Нове авто';
 }
 
 function normPlate(value) {
@@ -70,15 +185,18 @@ function normPlate(value) {
 }
 
 async function ensurePermissionInteractive() {
-  if (!('Notification' in window)) { setStatus('Браузер не підтримує сповіщення.', 'err'); return false; }
-  if (Notification.permission === 'denied') { setStatus('Сповіщення заборонені для цього сайту.', 'err'); return false; }
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'denied') return false;
   if (Notification.permission === 'default') {
-    try { const r = await Notification.requestPermission(); if (r !== 'granted') return false; } catch { return false; }
+    try {
+      const r = await Notification.requestPermission();
+      if (r !== 'granted') return false;
+    } catch {
+      return false;
+    }
   }
   return true;
 }
-
-const ICON_URL = new URL('assets/img/icon.png', document.baseURI).href;
 
 function notifyPlateTime(plate, eta) {
   const title = 'єЧерга';
@@ -86,68 +204,68 @@ function notifyPlateTime(plate, eta) {
   try {
     const n = new Notification(title, {
       body,
-      tag: 'echerha-watch',
+      tag: `echerha-watch-${plate || 'default'}`,
       renotify: true,
       icon: ICON_URL
     });
     n.onclick = () => { window.focus(); n.close(); };
-  } catch (e) {
+  } catch {
     alert(`${title}\n\n${body}`);
   }
 }
 
-/* ——— FETCH з ретраями/бекоффом (403/429) і зрозумілим текстом помилки ——— */
+function apiUrl(plate, checkpointId, page = 1) {
+  const base = `https://back.echerha.gov.ua/api/v4/workload/${DIR}/checkpoints/${checkpointId}/details/${CATEGORY}/${DAYS}`;
+  const params = new URLSearchParams({ page, plate_number: plate });
+  return `${base}?${params.toString()}`;
+}
+
 async function getJSON(url) {
   const full = `${PROXY_URL}?url=${encodeURIComponent(url)}`;
   for (let attempt = 1; attempt <= 3; attempt++) {
-    const resp = await fetch(full, { cache:'no-store' });
+    const resp = await fetch(full, { cache: 'no-store' });
     const text = await resp.text();
+
     if (resp.ok) {
-      try { return JSON.parse(text); }
-      catch { throw new Error('Bad JSON from upstream'); }
+      try {
+        return JSON.parse(text);
+      } catch {
+        throw new Error('Bad JSON from upstream');
+      }
     }
-    // лог для діагностики
+
     console.warn('Upstream error', resp.status, text.slice(0, 300));
-    // 429/403 → експоненційний бекофф
+
     if (resp.status === 429 || resp.status === 403) {
       const ra = Number(resp.headers.get('retry-after')) || 0;
-      const wait = ra ? ra*1000 : 300*attempt*attempt + Math.floor(Math.random()*400);
+      const wait = ra ? ra * 1000 : 300 * attempt * attempt + Math.floor(Math.random() * 400);
       await sleep(wait);
       continue;
     }
+
     throw new Error(`HTTP ${resp.status} · ${text.slice(0, 160)}`);
   }
+
   throw new Error('Rate-limited (too many retries)');
 }
 
 function mapFields(data) {
   const first = data?.data?.[0] || {};
   const cp = data?.checkpoint || {};
-  const cpTitle = cp.title;
   return [
-    ['Пункт пропуску', cpTitle],
+    ['Пункт пропуску', cp.title || '—'],
     ['Номер авто', first.plate_number || '—'],
     ['Реєстрація в черзі', first.confirmed_at || '—'],
     ['Орієнтовний час заїзду на кордон', first.estimated_time || '—'],
   ];
 }
-function renderFields(pairs) {
-  const box = $('fields');
-  box.innerHTML = '';
-  for (const [k,v] of pairs) {
-    const row = document.createElement('div');
-    row.className = 'frow';
-    row.innerHTML = `<div class="k">${k}</div><div class="v mono" title="${String(v ?? '—')}">${v ?? '—'}</div>`;
-    box.appendChild(row);
-  }
-}
 
-/* === НОВЕ: пошук КПП за номером з паузами (анти-rate-limit) === */
 function isHitForPlate(userPlate, json) {
   const first = json?.data?.[0];
   if (!first?.plate_number) return false;
   return normPlate(first.plate_number) === normPlate(userPlate);
 }
+
 async function probeCheckpoint(plate, cpId) {
   try {
     const json = await getJSON(apiUrl(plate, cpId));
@@ -156,182 +274,446 @@ async function probeCheckpoint(plate, cpId) {
     return { ok: false, json: null };
   }
 }
-/* Алгоритм:
-   1) якщо є кеш для цього номеру — спершу пробуємо його
-   2) якщо не зійшлось — ідемо послідовно по CHECKPOINTS із паузами
-*/
-async function findCheckpointByPlate(plate) {
-  const cachedId = Number(localStorage.getItem('ech_last_cp:' + normPlate(plate)) || 0);
-  if (cachedId) {
-    setStatus(`Шукаю на кешованому КПП (${cachedId})…`);
-    const { ok, json } = await probeCheckpoint(plate, cachedId);
-    if (ok) return { id: cachedId, name: json?.checkpoint?.title || String(cachedId), json };
+
+async function findCheckpointByPlate(plate, watcherId) {
+  const watcher = getWatcher(watcherId);
+  if (!watcher) return null;
+
+  if (watcher.checkpointId) {
+    setWatcherStatus(watcherId, `Шукаю на кешованому КПП (${watcher.checkpointId})…`);
+    const { ok, json } = await probeCheckpoint(plate, watcher.checkpointId);
+    if (ok) {
+      return {
+        id: watcher.checkpointId,
+        name: json?.checkpoint?.title || watcher.checkpointName || String(watcher.checkpointId),
+        json
+      };
+    }
   }
-  setStatus('Шукаю КПП для номера…');
+
+  setWatcherStatus(watcherId, 'Шукаю КПП для номера…');
+
   for (const cp of CHECKPOINTS) {
     const { ok, json } = await probeCheckpoint(plate, cp.id);
-    if (ok) return { id: cp.id, name: json?.checkpoint?.title || cp.name, json };
-    await sleep(120 + Math.random()*200); // 120–320 мс пауза між пробами
+    if (ok) {
+      return {
+        id: cp.id,
+        name: json?.checkpoint?.title || cp.name,
+        json
+      };
+    }
+    await sleep(150 + Math.random() * 250);
   }
+
   return null;
 }
 
-/* ——— Основний тик — тепер знає cpId і використовує пер-пару лічильник ——— */
-async function tick(plate, cpId) {
+async function tickWatcher(watcherId) {
+  const watcher = getWatcher(watcherId);
+  if (!watcher) return;
+
+  if (!watcher.plate || !watcher.checkpointId) {
+    setWatcherStatus(watcherId, 'Не задано номер або КПП.', 'warn');
+    return;
+  }
+
   try {
-    setStatus('Завантаження…');
-    const json = await getJSON(apiUrl(plate, cpId));
-    renderFields(mapFields(json));
+    setWatcherStatus(watcherId, 'Завантаження…');
+
+    const json = await getJSON(apiUrl(watcher.plate, watcher.checkpointId));
+    const pairs = mapFields(json);
+    setWatcherFields(watcherId, pairs);
 
     const first = json?.data?.[0] || {};
-    const plateNow = first.plate_number || '—';
-    const etaNow   = first.estimated_time || '—';
+    const plateNow = first.plate_number || watcher.plate || '—';
+    const etaNow = first.estimated_time || '—';
 
-    // Стабільний ключ стану (без estimated_time)
     const keyNow = JSON.stringify({
       position_number: first.position_number ?? null,
-      confirmed_at   : first.confirmed_at ?? null,
+      confirmed_at: first.confirmed_at ?? null,
     });
 
-    const keyCombo = `${normPlate(plate)}|${String(cpId)}`;
-    const lastKey = lastKeyMap[keyCombo] ?? localStorage.getItem('ech_last_key:' + keyCombo) ?? '';
-    const changed = !!lastKey && keyNow !== lastKey;
+    const changed = !!watcher.lastKey && keyNow !== watcher.lastKey;
+    watcher.lastKey = keyNow;
 
-    lastKeyMap[keyCombo] = keyNow;
-    localStorage.setItem('ech_last_key:' + keyCombo, keyNow);
+    const pingEvery = Number(watcher.pingEvery || '5');
+    watcher.pingCounter = (watcher.pingCounter + 1) % pingEvery;
 
-    // Лічильник пінгів на комбінацію plate|cp
-    const counterKey = 'ech_pingCounter:' + keyCombo;
-    let pingCounter = Number(localStorage.getItem(counterKey) || 0);
-    const pingEvery = Number($('pingEvery').value || '5');
-    pingCounter = (pingCounter + 1) % pingEvery;
-    localStorage.setItem(counterKey, String(pingCounter));
+    const shouldNotify = changed || (watcher.pingCounter === 0 && watcher.lastKey !== '');
 
-    const shouldNotify = changed || (pingCounter === 0 && lastKey !== '');
+    setWatcherStatus(
+      watcherId,
+      `Останнє оновлення: ${new Date().toLocaleTimeString()}${shouldNotify ? ' · нотифікація' : ''}`,
+      shouldNotify ? 'ok' : ''
+    );
 
-    setStatus(`Останнє оновлення: ${new Date().toLocaleTimeString()}${shouldNotify ? ' · нотифікація' : ''}`, shouldNotify ? 'ok' : '');
-    if (shouldNotify) notifyPlateTime(plateNow, etaNow, true);
+    saveWatchers();
 
+    if (shouldNotify) {
+      notifyPlateTime(plateNow, etaNow);
+    }
   } catch (e) {
     console.error(e);
-    setStatus(`Помилка: ${String(e.message || e)}`, 'err');
+    setWatcherStatus(watcherId, `Помилка: ${String(e.message || e)}`, 'err');
   }
 }
 
-/* ——— Самопланувальник з джиттером ±10% замість setInterval ——— */
-async function loop(plate, cpId) {
-  await tick(plate, cpId);
-  const base = Number($('interval').value) * 1000;
+async function loopWatcher(watcherId) {
+  const watcher = getWatcher(watcherId);
+  if (!watcher || !watcher.isRunning) return;
+
+  await tickWatcher(watcherId);
+
+  const current = getWatcher(watcherId);
+  if (!current || !current.isRunning) return;
+
+  const base = Number(current.interval) * 1000;
   const jitter = Math.floor(base * 0.1 * Math.random());
-  loopHandle = setTimeout(() => loop(plate, cpId), base + jitter);
+
+  current.loopHandle = setTimeout(() => {
+    loopWatcher(watcherId);
+  }, base + jitter);
+
+  saveWatchers();
 }
 
-/* === Старт/Стоп з автопошуком КПП === */
-async function startPolling() {
-  const plate = normPlate($('plate').value);
-  $('plate').value = plate;
+async function startWatcher(watcherId) {
+  const watcher = getWatcher(watcherId);
+  if (!watcher) return;
 
-  if (!plate) {
-    setStatus('Введи номер авто', 'warn');
+  watcher.plate = normPlate(watcher.plate);
+
+  if (!watcher.plate) {
+    setWatcherStatus(watcherId, 'Введи номер авто', 'warn');
+    renderCard();
     return;
   }
-  const ok = await ensurePermissionInteractive(); if (!ok) return;
 
-  // Зберігаємо вибір користувача
-  localStorage.setItem('ech_plate', plate);
-  localStorage.setItem('ech_interval', $('interval').value);
-  localStorage.setItem('ech_pingEvery', $('pingEvery').value);
+  const ok = await ensurePermissionInteractive();
+  if (!ok) {
+    setWatcherStatus(watcherId, 'Дозволь сповіщення у браузері.', 'warn');
+    return;
+  }
 
-  // Знаходимо КПП
-  const found = await findCheckpointByPlate(plate);
-  if (!found) { setStatus('Номер не знайдено на вказаних КПП.', 'warn'); return; }
+  const found = await findCheckpointByPlate(watcher.plate, watcherId);
+  if (!found) {
+    setWatcherStatus(watcherId, 'Номер не знайдено на вказаних КПП.', 'warn');
+    return;
+  }
 
-  selectedCheckpointId = found.id;
-  selectedCheckpointName = found.name || String(found.id);
-  localStorage.setItem('ech_last_cp:' + normPlate(plate), String(selectedCheckpointId));
+  watcher.checkpointId = found.id;
+  watcher.checkpointName = found.name || String(found.id);
+  watcher.lastKey = '';
+  watcher.pingCounter = 0;
+  watcher.isRunning = true;
 
-  // Скидаємо стан лише для цього plate+cp
-  const keyCombo = `${normPlate(plate)}|${String(selectedCheckpointId)}`;
-  lastKeyMap[keyCombo] = '';
-  localStorage.setItem('ech_last_key:' + keyCombo, '');
-  localStorage.setItem('ech_pingCounter:' + keyCombo, '0');
+  if (watcher.loopHandle) {
+    clearTimeout(watcher.loopHandle);
+    watcher.loopHandle = null;
+  }
 
-  clearTimeout(loopHandle);
-  setStatus(`Знайдено КПП: ${selectedCheckpointName} (ID ${selectedCheckpointId}). Починаю моніторинг…`);
-  await loop(plate, selectedCheckpointId);
+  saveWatchers();
+  renderApp();
+
+  setWatcherStatus(
+    watcherId,
+    `Знайдено КПП: ${watcher.checkpointName} (ID ${watcher.checkpointId}). Починаю моніторинг…`
+  );
+
+  const startDelay = Math.floor(Math.random() * 1500);
+  watcher.loopHandle = setTimeout(() => loopWatcher(watcherId), startDelay);
+  saveWatchers();
 }
-function stopPolling(){
-  clearTimeout(loopHandle);
-  setStatus('Зупинено.', 'warn');
+
+function stopWatcher(watcherId) {
+  const watcher = getWatcher(watcherId);
+  if (!watcher) return;
+
+  if (watcher.loopHandle) {
+    clearTimeout(watcher.loopHandle);
+    watcher.loopHandle = null;
+  }
+
+  watcher.isRunning = false;
+  saveWatchers();
+  setWatcherStatus(watcherId, 'Зупинено.', 'warn');
 }
 
-/* Події UI */
-$('start').onclick = startPolling;
-$('stop').onclick  = stopPolling;
+function renderTabsHtml() {
+  return watchers.map(watcher => `
+    <button
+      class="tab-btn ${watcher.id === activeWatcherId ? 'active' : ''}"
+      data-tab-id="${watcher.id}"
+      type="button"
+    >
+      ${watcherDisplayTitle(watcher)}
+    </button>
+  `).join('');
+}
 
-$('plate').addEventListener('input', function () {
-  const normalized = normPlate(this.value);
-  this.value = normalized;
-});
+function renderFieldsHtml(pairs) {
+  return pairs.map(([k, v]) => `
+    <div class="frow">
+      <div class="k">${k}</div>
+      <div class="v mono" title="${String(v ?? '—')}">${v ?? '—'}</div>
+    </div>
+  `).join('');
+}
 
-// тестова нотифікація у футері
-const testBtn = document.getElementById('testNotif');
-if (testBtn) {
-  testBtn.addEventListener('click', async () => {
-    const ok = await ensurePermissionInteractive();
-    if (!ok) { setStatus('Дозволь сповіщення у браузері, тоді спрацює тест.', 'warn'); return; }
-    const now = new Date().toLocaleTimeString();
-    notifyPlateTime('🥳', `Сповіщення працюють!`, true);
-    setStatus('Тестову нотифікацію показано.', 'ok');
+function renderCard() {
+  const host = $('cardHost');
+  const watcher = getActiveWatcher();
+
+  if (!watcher) {
+    host.innerHTML = `<div class="card-host-empty">Немає активної вкладки.</div>`;
+    return;
+  }
+
+  host.innerHTML = `
+    <div class="card-shell">
+      <div class="card">
+        <div class="card-tabs">
+          <div class="tabs">
+            ${renderTabsHtml()}
+          </div>
+          <button id="addWatcherBtn" class="tab-add-btn" title="Додати авто" type="button">+</button>
+        </div>
+
+        <div class="card-topbar">
+          <div class="card-plate-title">${watcherDisplayTitle(watcher)}</div>
+          <div class="card-topbar-actions">
+            <button id="deleteWatcherBtn" class="small-btn" title="Видалити авто" type="button">🗑</button>
+          </div>
+        </div>
+
+        <div class="hdr">
+          <div class="title">
+            <div class="logo">
+              <img class="logo" src="assets/img/logo.png" alt="">
+            </div>
+          </div>
+
+          <div class="controls">
+            <label>
+              <h3>Введіть номер тягача або автомобіля (латиницею)</h3>
+              <input id="plateInput" value="${watcher.plate}" size="14"/>
+            </label>
+
+            <label>
+              <h3>Як часто робити запит</h3>
+              <div class="select-wrap">
+                <select id="intervalInput" title="Як часто опитувати API">
+                  <option value="60" ${watcher.interval === '60' ? 'selected' : ''}>Щохвилини</option>
+                  <option value="180" ${watcher.interval === '180' ? 'selected' : ''}>Кожні 3 хв</option>
+                  <option value="300" ${watcher.interval === '300' ? 'selected' : ''}>Кожні 5 хв</option>
+                </select>
+              </div>
+            </label>
+
+            <label>
+              <h3>Як часто показувати сповіщення</h3>
+              <div class="select-wrap">
+                <select id="pingEveryInput" title="Нагадувати без змін кожні N перевірок">
+                  <option value="3" ${watcher.pingEvery === '3' ? 'selected' : ''}>Нагадувати кожні 3 перевірки</option>
+                  <option value="5" ${watcher.pingEvery === '5' ? 'selected' : ''}>Нагадувати кожні 5 перевірок</option>
+                  <option value="10" ${watcher.pingEvery === '10' ? 'selected' : ''}>Нагадувати кожні 10 перевірок</option>
+                </select>
+              </div>
+            </label>
+
+            <div class="buttons">
+              <button id="startBtn" type="button">Старт</button>
+              <button id="stopBtn" class="secondary" type="button">Стоп</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="wrap">
+          <div class="pane">
+            <div class="ph">Дані по авто</div>
+            <div id="fieldsBox">${renderFieldsHtml(watcher.fields)}</div>
+          </div>
+        </div>
+
+        <div class="foot">
+          <div id="statusBox" class="muted ${watcher.statusClass || ''}">
+            ${watcher.status}
+          </div>
+
+          <div class="foot-actions">
+            <button id="testNotifBtn" class="tiny-btn" title="Показати тестову нотифікацію" type="button">🔔</button>
+            <button id="helpBtn" class="help-btn" aria-haspopup="dialog" aria-controls="helpModal" aria-expanded="false" title="Інструкція" type="button">?</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  bindCardEvents(watcher.id);
+}
+
+function bindCardEvents(watcherId) {
+  const watcher = getWatcher(watcherId);
+  if (!watcher) return;
+
+  const plateInput = $('plateInput');
+  const intervalInput = $('intervalInput');
+  const pingEveryInput = $('pingEveryInput');
+  const startBtn = $('startBtn');
+  const stopBtn = $('stopBtn');
+  const deleteBtn = $('deleteWatcherBtn');
+  const testNotifBtn = $('testNotifBtn');
+  const helpBtn = $('helpBtn');
+  const addWatcherBtn = $('addWatcherBtn');
+
+  document.querySelectorAll('[data-tab-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tabId = btn.getAttribute('data-tab-id');
+      setActiveWatcher(tabId);
+    });
   });
-}
 
-/* Відновлення налаштувань */
-$('plate').value = normPlate(localStorage.getItem('ech_plate') || '');
-$('interval').value = localStorage.getItem('ech_interval') || '180';
-$('pingEvery').value = localStorage.getItem('ech_pingEvery') || '5';
+  addWatcherBtn.addEventListener('click', addWatcher);
 
-/* Підказка про дозволи */
-(function hintPerm(){
-  if (!('Notification' in window)) { setStatus('Браузер не підтримує сповіщення.', 'err'); return; }
-  if (Notification.permission === 'denied') setStatus('Сповіщення заборонені для цього сайту.', 'err');
-  if (Notification.permission === 'default') setStatus('Натисни «Тест нотифікації» → Дозволити.', 'warn');
-})();
+  plateInput.addEventListener('input', () => {
+    watcher.plate = normPlate(plateInput.value);
+    plateInput.value = watcher.plate;
 
-document.addEventListener('DOMContentLoaded', () => {
-  const helpBtn    = document.getElementById('helpBtn');
-  const helpModal  = document.getElementById('helpModal');
-  const helpClose  = document.getElementById('helpClose');
-  const helpDialog = document.getElementById('helpDialog');
+    // оновлюємо тільки те, що потрібно, без ре-рендеру
+    const titleEl = document.querySelector('.card-plate-title');
+    if (titleEl) {
+      titleEl.textContent = watcherDisplayTitle(watcher);
+    }
 
-  if (!helpBtn || !helpModal || !helpClose || !helpDialog) {
-    console.error('Help modal: elements not found (ids: helpBtn, helpModal, helpClose, helpDialog).');
-    return;
-  }
+    const activeTab = document.querySelector(`[data-tab-id="${watcher.id}"]`);
+    if (activeTab) {
+      activeTab.textContent = watcherDisplayTitle(watcher);
+    }
 
-  let _prevFocus = null;
+    saveWatchers();
+  });
 
-  function openHelp(){
-    _prevFocus = document.activeElement;
-    helpModal.classList.add('open');
-    helpModal.removeAttribute('hidden');
-    helpBtn.setAttribute('aria-expanded','true');
-    helpDialog.focus();
-    document.documentElement.style.overflow = 'hidden';
-  }
+  intervalInput.addEventListener('change', () => {
+    watcher.interval = intervalInput.value;
+    saveWatchers();
+  });
 
-  function closeHelp(){
-    helpModal.classList.remove('open');
-    helpModal.setAttribute('hidden','');
-    helpBtn.setAttribute('aria-expanded','false');
-    document.documentElement.style.overflow = '';
-    (_prevFocus || helpBtn).focus();
-  }
+  pingEveryInput.addEventListener('change', () => {
+    watcher.pingEvery = pingEveryInput.value;
+    saveWatchers();
+  });
+
+  startBtn.addEventListener('click', () => startWatcher(watcherId));
+  stopBtn.addEventListener('click', () => stopWatcher(watcherId));
+
+  deleteBtn.addEventListener('click', () => {
+    removeWatcher(watcherId);
+  });
+
+  testNotifBtn.addEventListener('click', async () => {
+    const ok = await ensurePermissionInteractive();
+    if (!ok) {
+      setWatcherStatus(watcherId, 'Дозволь сповіщення у браузері, тоді спрацює тест.', 'warn');
+      return;
+    }
+    notifyPlateTime(watcher.plate || '🥳', 'Сповіщення працюють!');
+    setWatcherStatus(watcherId, 'Тестову нотифікацію показано.', 'ok');
+  });
 
   helpBtn.addEventListener('click', openHelp);
+}
+
+function renderApp() {
+  renderCard();
+}
+
+let _prevFocus = null;
+
+function openHelp() {
+  const helpBtn = $('helpBtn');
+  const helpModal = $('helpModal');
+  const helpDialog = $('helpDialog');
+
+  _prevFocus = document.activeElement;
+  helpModal.classList.add('open');
+  helpModal.removeAttribute('hidden');
+
+  if (helpBtn) {
+    helpBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  helpDialog.focus();
+  document.documentElement.style.overflow = 'hidden';
+}
+
+function closeHelp() {
+  const helpBtn = $('helpBtn');
+  const helpModal = $('helpModal');
+
+  helpModal.classList.remove('open');
+  helpModal.setAttribute('hidden', '');
+
+  if (helpBtn) {
+    helpBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  document.documentElement.style.overflow = '';
+  (_prevFocus || helpBtn)?.focus();
+}
+
+function setupGlobalEvents() {
+  const helpModal = $('helpModal');
+  const helpClose = $('helpClose');
+
   helpClose.addEventListener('click', closeHelp);
-  helpModal.addEventListener('click', (e) => { if (e.target === helpModal) closeHelp(); });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && helpModal.classList.contains('open')) closeHelp();
+
+  helpModal.addEventListener('click', (e) => {
+    if (e.target === helpModal) {
+      closeHelp();
+    }
   });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && helpModal.classList.contains('open')) {
+      closeHelp();
+    }
+  });
+}
+
+function restoreRunningWatchers() {
+  let offset = 0;
+
+  for (const watcher of watchers) {
+    if (!watcher.isRunning) continue;
+
+    watcher.loopHandle = setTimeout(() => loopWatcher(watcher.id), offset);
+    offset += 2000;
+  }
+}
+
+function initPermissionHint() {
+  const watcher = getActiveWatcher();
+  if (!watcher) return;
+
+  if (!('Notification' in window)) {
+    setWatcherStatus(watcher.id, 'Браузер не підтримує сповіщення.', 'err');
+    return;
+  }
+
+  if (Notification.permission === 'denied') {
+    setWatcherStatus(watcher.id, 'Сповіщення заборонені для цього сайту.', 'err');
+    return;
+  }
+
+  if (Notification.permission === 'default') {
+    setWatcherStatus(watcher.id, 'Натисни «🔔» → Дозволити.', 'warn');
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  loadWatchers();
+  setupGlobalEvents();
+  renderApp();
+  initPermissionHint();
+  restoreRunningWatchers();
 });

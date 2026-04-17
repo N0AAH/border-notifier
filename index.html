@@ -8,62 +8,10 @@
   <title>єЧерга — сповіщення за номером</title>
 </head>
 <body>
+
   <div class="app-shell">
-    <div class="card">
-    <div class="hdr">
-      <div class="title">
-        <div class="logo"><img class="logo" src="assets/img/logo.png" alt="">
-        </div>
-     </div>
-      <div class="controls">
-        <label for="plate">
-          <h3>Введіть номер тягача або автомобіля (латиницею)</h3>
-          <input id="plate" size="14"/>
-        </label>
-        <label for="interval">
-          <h3>Як часто робити запит</h3><div class="select-wrap">
-          <select id="interval" title="Як часто опитувати API">
-            <option value="60">Щохвилини</option>
-            <option value="180">Кожні 3 хв</option>
-            <option value="300">Кожні 5 хв</option>
-          </select>
-          </div>
-        </label>
-        <label for="pingEvery">
-          <h3>Як часто показувати сповіщення</h3><div class="select-wrap" >                    
-          <select id="pingEvery" title="Нагадувати без змін кожні N перевірок">
-            <option value="3">Нагадувати кожні 3 перевірки</option>
-            <option value="5" selected>Нагадувати кожні 5 перевірок</option>
-            <option value="10">Нагадувати кожні 10 перевірок</option>
-          </select></div>
-        </label>
-     <div class="buttons">
-      <button id="start">Старт</button>
-      <button id="stop" class="secondary">Стоп</button>
-    </div>
-      </div>
-    </div>
-
-    <div class="wrap">
-      <div class="pane">
-        <div class="ph">Дані по авто</div>
-        <div id="fields"></div>
-      </div>
-    </div>
-
-    <div class="foot">
-      <div id="status" class="muted">
-        Введіть номер авто, задайте параметри сповіщень та натисніть "Старт"
-      </div>
-
-      <div class="foot-actions">
-        <button id="testNotif" class="tiny-btn" title="Показати тестову нотифікацію">🔔</button>
-        <button id="helpBtn" class="help-btn" aria-haspopup="dialog" aria-controls="helpModal" aria-expanded="false" title="Інструкція">?</button>
-      </div>
-    </div>
-    </div>
+    <div id="cardHost"></div>
   </div>
-
 
   <!-- Модальне вікно: інструкція -->
   <div id="helpModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" hidden>
