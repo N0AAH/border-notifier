@@ -188,13 +188,20 @@ function watcherDisplayTitle(watcher) {
 }
 
 function normPlate(value) {
-  return (value || '')
+  const raw = (value || '')
     .toUpperCase()
     .replace(/\s+/g, '')
     .split('')
     .map(ch => CYR_TO_LAT_PLATE_MAP[ch] || ch)
     .join('')
-    .replace(/[^A-Z0-9]/g, '');
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8);
+
+  const part1 = raw.slice(0, 2);
+  const part2 = raw.slice(2, 6);
+  const part3 = raw.slice(6, 8);
+
+  return [part1, part2, part3].filter(Boolean).join(' ');
 }
 
 async function ensurePermissionInteractive() {
@@ -465,13 +472,13 @@ function renderTabsHtml() {
       role="tab"
       tabindex="0"
     >
-      <span class="tab-btn-label" title="Подвійний клік, щоб перейменувати">${watcherDisplayTitle(watcher)}</span>
+      <span class="tab-btn-label">${watcherDisplayTitle(watcher)}</span>
       <button
         class="tab-edit-btn"
         data-edit-tab-id="${watcher.id}"
         type="button"
-        title="Перейменувати таб"
-        aria-label="Перейменувати таб ${watcherDisplayTitle(watcher)}"
+        title="Перейменувати вкладку"
+        aria-label="Перейменувати вкладку ${watcherDisplayTitle(watcher)}"
       >
         ✎
       </button>
@@ -479,8 +486,8 @@ function renderTabsHtml() {
         class="tab-delete-btn"
         data-delete-tab-id="${watcher.id}"
         type="button"
-        title="Видалити авто"
-        aria-label="Видалити авто ${watcherDisplayTitle(watcher)}"
+        title="Видалити вкладку"
+        aria-label="Видалити вкладку ${watcherDisplayTitle(watcher)}"
       >
         ✕
       </button>
@@ -512,7 +519,7 @@ host.innerHTML = `
       <div class="tabs">
         ${renderTabsHtml()}
       </div>
-      <button id="addWatcherBtn" class="tab-add-btn" title="Додати авто" type="button">+</button>
+      <button id="addWatcherBtn" class="tab-add-btn" title="Додати нову вкладку" type="button">+</button>
     </div>
 
     <div class="card">
@@ -529,7 +536,7 @@ host.innerHTML = `
 
         <div class="controls">
           <label>
-            <h3>Введіть номер тягача або автомобіля (латиницею)</h3>
+            <h3>Введіть номер автомобіля або тягача</h3>
             <input id="plateInput" value="${watcher.plate}" size="14"/>
           </label>
 
