@@ -896,7 +896,15 @@ function initTabsSortable() {
     items: '.tab-btn',
     axis: 'x',
     containment: '.card-tabs',
-    helper: 'clone',
+    helper: function (_, item) {
+      const { width, height } = item[0].getBoundingClientRect();
+      return item.clone().css({
+        width: width,
+        minWidth: width,
+        height: height,
+        boxSizing: 'border-box',
+      });
+    },
     appendTo: '.card-tabs',
     tolerance: 'pointer',
     distance: 8,
@@ -906,15 +914,8 @@ function initTabsSortable() {
 
     start: function (_, ui) {
       ui.item.addClass('dragging');
-
-      ui.helper.css({
-        width: ui.item.outerWidth(),
-        height: ui.item.outerHeight()
-      });
-
       ui.placeholder.css({
-        width: ui.item.outerWidth(),
-        height: ui.item.outerHeight()
+        width: ui.helper[0].getBoundingClientRect().width,
       });
     },
 
