@@ -78,7 +78,7 @@ body{
   flex:0 1 auto;
   min-width:0;
   flex-wrap:nowrap;
-  overflow:hidden;
+  overflow:visible;
 }
 
 
@@ -536,3 +536,19 @@ button.secondary:hover{
 }
 .foot .help-btn:hover{ background:#162443; color:var(--fg); }
 
+.ui-sortable-helper{
+  z-index:20;
+}
+
+.tab-sortable-placeholder{
+  visibility:visible !important;
+  box-sizing:border-box;
+  flex:0 0 auto;
+  min-width:0;
+  height:54px;
+  margin:0;
+  /* border:1px dashed var(--stroke); */
+  border-radius:12px 12px 0 0;
+  background:rgba(38, 50, 75, 0);
+  align-self:flex-end;
+}

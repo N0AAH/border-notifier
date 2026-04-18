@@ -44,7 +44,7 @@ const ICON_URL = new URL('assets/img/icon.png', document.baseURI).href;
 const STORAGE_KEY = 'ech_watchers_v1';
 const ACTIVE_TAB_KEY = 'ech_active_watcher_id';
 
-const $ = (id) => document.getElementById(id);
+const byId = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 let watchers = [];
@@ -505,7 +505,7 @@ function renderFieldsHtml(pairs) {
 }
 
 function renderCard() {
-  const host = $('cardHost');
+  const host = byId('cardHost');
   const watcher = getActiveWatcher();
 
   if (!watcher) {
@@ -513,98 +513,99 @@ function renderCard() {
     return;
   }
 
-host.innerHTML = `
-  <div class="card-shell">
-    <div class="card-tabs">
-      <div class="tabs">
-        ${renderTabsHtml()}
-      </div>
-      <button id="addWatcherBtn" class="tab-add-btn" title="Додати нову вкладку" type="button">+</button>
-    </div>
-
-    <div class="card">
-      <div class="card-topbar">
-        <div class="card-plate-title">${watcher.plate || 'Нове авто'}</div>
+  host.innerHTML = `
+    <div class="card-shell">
+      <div class="card-tabs">
+        <div id="sortableTabs" class="tabs">
+          ${renderTabsHtml()}
+        </div>
+        <button id="addWatcherBtn" class="tab-add-btn" title="Додати нову вкладку" type="button">+</button>
       </div>
 
-      <div class="hdr">
-        <div class="title">
-          <div class="logo">
-            <img class="logo" src="assets/img/logo.png" alt="">
+      <div class="card">
+        <div class="card-topbar">
+          <div class="card-plate-title">${watcher.plate || 'Нове авто'}</div>
+        </div>
+
+        <div class="hdr">
+          <div class="title">
+            <div class="logo">
+              <img class="logo" src="assets/img/logo.png" alt="">
+            </div>
+          </div>
+
+          <div class="controls">
+            <label>
+              <h3>Введіть номер автомобіля або тягача</h3>
+              <input id="plateInput" value="${watcher.plate}" size="14"/>
+            </label>
+
+            <label>
+              <h3>Як часто робити запит</h3>
+              <div class="select-wrap">
+                <select id="intervalInput" title="Як часто опитувати API">
+                  <option value="60" ${watcher.interval === '60' ? 'selected' : ''}>Щохвилини</option>
+                  <option value="180" ${watcher.interval === '180' ? 'selected' : ''}>Кожні 3 хв</option>
+                  <option value="300" ${watcher.interval === '300' ? 'selected' : ''}>Кожні 5 хв</option>
+                </select>
+              </div>
+            </label>
+
+            <label>
+              <h3>Як часто показувати сповіщення</h3>
+              <div class="select-wrap">
+                <select id="pingEveryInput" title="Нагадувати без змін кожні N перевірок">
+                  <option value="3" ${watcher.pingEvery === '3' ? 'selected' : ''}>Нагадувати кожні 3 перевірки</option>
+                  <option value="5" ${watcher.pingEvery === '5' ? 'selected' : ''}>Нагадувати кожні 5 перевірок</option>
+                  <option value="10" ${watcher.pingEvery === '10' ? 'selected' : ''}>Нагадувати кожні 10 перевірок</option>
+                </select>
+              </div>
+            </label>
+
+            <div class="buttons">
+              <button id="startBtn" type="button">Старт</button>
+              <button id="stopBtn" class="secondary" type="button">Стоп</button>
+            </div>
           </div>
         </div>
 
-        <div class="controls">
-          <label>
-            <h3>Введіть номер автомобіля або тягача</h3>
-            <input id="plateInput" value="${watcher.plate}" size="14"/>
-          </label>
+        <div class="wrap">
+          <div class="pane">
+            <div class="ph">Дані по авто</div>
+            <div id="fieldsBox">${renderFieldsHtml(watcher.fields)}</div>
+          </div>
+        </div>
 
-          <label>
-            <h3>Як часто робити запит</h3>
-            <div class="select-wrap">
-              <select id="intervalInput" title="Як часто опитувати API">
-                <option value="60" ${watcher.interval === '60' ? 'selected' : ''}>Щохвилини</option>
-                <option value="180" ${watcher.interval === '180' ? 'selected' : ''}>Кожні 3 хв</option>
-                <option value="300" ${watcher.interval === '300' ? 'selected' : ''}>Кожні 5 хв</option>
-              </select>
-            </div>
-          </label>
+        <div class="foot">
+          <div id="statusBox" class="muted ${watcher.statusClass || ''}">
+            ${watcher.status}
+          </div>
 
-          <label>
-            <h3>Як часто показувати сповіщення</h3>
-            <div class="select-wrap">
-              <select id="pingEveryInput" title="Нагадувати без змін кожні N перевірок">
-                <option value="3" ${watcher.pingEvery === '3' ? 'selected' : ''}>Нагадувати кожні 3 перевірки</option>
-                <option value="5" ${watcher.pingEvery === '5' ? 'selected' : ''}>Нагадувати кожні 5 перевірок</option>
-                <option value="10" ${watcher.pingEvery === '10' ? 'selected' : ''}>Нагадувати кожні 10 перевірок</option>
-              </select>
-            </div>
-          </label>
-
-          <div class="buttons">
-            <button id="startBtn" type="button">Старт</button>
-            <button id="stopBtn" class="secondary" type="button">Стоп</button>
+          <div class="foot-actions">
+            <button id="testNotifBtn" class="tiny-btn" title="Показати тестову нотифікацію" type="button">🔔</button>
+            <button id="helpBtn" class="help-btn" aria-haspopup="dialog" aria-controls="helpModal" aria-expanded="false" title="Інструкція" type="button">?</button>
           </div>
         </div>
       </div>
-
-      <div class="wrap">
-        <div class="pane">
-          <div class="ph">Дані по авто</div>
-          <div id="fieldsBox">${renderFieldsHtml(watcher.fields)}</div>
-        </div>
-      </div>
-
-      <div class="foot">
-        <div id="statusBox" class="muted ${watcher.statusClass || ''}">
-          ${watcher.status}
-        </div>
-
-        <div class="foot-actions">
-          <button id="testNotifBtn" class="tiny-btn" title="Показати тестову нотифікацію" type="button">🔔</button>
-          <button id="helpBtn" class="help-btn" aria-haspopup="dialog" aria-controls="helpModal" aria-expanded="false" title="Інструкція" type="button">?</button>
-        </div>
-      </div>
     </div>
-  </div>
-`;
+  `;
 
   bindCardEvents(watcher.id);
+  initTabsSortable();
 }
 
 function bindCardEvents(watcherId) {
   const watcher = getWatcher(watcherId);
   if (!watcher) return;
 
-  const plateInput = $('plateInput');
-  const intervalInput = $('intervalInput');
-  const pingEveryInput = $('pingEveryInput');
-  const startBtn = $('startBtn');
-  const stopBtn = $('stopBtn');
-  const testNotifBtn = $('testNotifBtn');
-  const helpBtn = $('helpBtn');
-  const addWatcherBtn = $('addWatcherBtn');
+  const plateInput = byId('plateInput');
+  const intervalInput = byId('intervalInput');
+  const pingEveryInput = byId('pingEveryInput');
+  const startBtn = byId('startBtn');
+  const stopBtn = byId('stopBtn');
+  const testNotifBtn = byId('testNotifBtn');
+  const helpBtn = byId('helpBtn');
+  const addWatcherBtn = byId('addWatcherBtn');
 
   document.querySelectorAll('[data-tab-id]').forEach(tab => {
     tab.addEventListener('click', (e) => {
@@ -794,16 +795,6 @@ document.querySelectorAll('[data-edit-tab-id]').forEach(btn => {
 }
 
 
-
-
-// ///////////////////
-
-
-
-
-
-
-
 function renderApp() {
   renderCard();
 }
@@ -811,9 +802,9 @@ function renderApp() {
 let _prevFocus = null;
 
 function openHelp() {
-  const helpBtn = $('helpBtn');
-  const helpModal = $('helpModal');
-  const helpDialog = $('helpDialog');
+  const helpBtn = byId('helpBtn');
+  const helpModal = byId('helpModal');
+  const helpDialog = byId('helpDialog');
 
   _prevFocus = document.activeElement;
   helpModal.classList.add('open');
@@ -828,8 +819,8 @@ function openHelp() {
 }
 
 function closeHelp() {
-  const helpBtn = $('helpBtn');
-  const helpModal = $('helpModal');
+  const helpBtn = byId('helpBtn');
+  const helpModal = byId('helpModal');
 
   helpModal.classList.remove('open');
   helpModal.setAttribute('hidden', '');
@@ -843,8 +834,8 @@ function closeHelp() {
 }
 
 function setupGlobalEvents() {
-  const helpModal = $('helpModal');
-  const helpClose = $('helpClose');
+  const helpModal = byId('helpModal');
+  const helpClose = byId('helpClose');
 
   helpClose.addEventListener('click', closeHelp);
 
@@ -889,6 +880,67 @@ function initPermissionHint() {
   if (Notification.permission === 'default') {
     setWatcherStatus(watcher.id, 'Натисни «🔔» → Дозволити.', 'warn');
   }
+}
+
+function initTabsSortable() {
+  if (!window.jQuery || !window.jQuery.ui) return;
+
+  const $tabs = window.jQuery('#sortableTabs');
+  if (!$tabs.length) return;
+
+  if ($tabs.hasClass('ui-sortable')) {
+    $tabs.sortable('destroy');
+  }
+
+  $tabs.sortable({
+    items: '.tab-btn',
+    axis: 'x',
+    containment: '.card-tabs',
+    helper: 'clone',
+    appendTo: '.card-tabs',
+    tolerance: 'pointer',
+    distance: 8,
+    forcePlaceholderSize: true,
+    placeholder: 'tab-sortable-placeholder',
+    cancel: '.tab-edit-btn, .tab-delete-btn, .tab-label-input',
+
+    start: function (_, ui) {
+      ui.item.addClass('dragging');
+
+      ui.helper.css({
+        width: ui.item.outerWidth(),
+        height: ui.item.outerHeight()
+      });
+
+      ui.placeholder.css({
+        width: ui.item.outerWidth(),
+        height: ui.item.outerHeight()
+      });
+    },
+
+    stop: function (_, ui) {
+      ui.item.removeClass('dragging');
+    },
+
+    update: function (event, ui) {
+      const orderedIds = $tabs
+        .children('.tab-btn')
+        .map(function () {
+          return this.dataset.tabId;
+        })
+        .get();
+
+      watchers = orderedIds
+        .map(id => watchers.find(w => w.id === id))
+        .filter(Boolean);
+
+      activeWatcherId = ui.item.attr('data-tab-id');
+
+      saveWatchers();
+      renderApp();
+    }
+  });
+
 }
 
 document.addEventListener('DOMContentLoaded', () => {
