@@ -128,7 +128,7 @@ body{
   background:var(--card);
   color:#fff;
   /* border-color:var(--stroke); */
-  background-color: #142e55;
+  background-color: #061f45;
   z-index:5;
    box-shadow:none;
 }
