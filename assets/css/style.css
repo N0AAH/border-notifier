@@ -75,7 +75,7 @@ body{
   display:flex;
   align-items:flex-end;
   gap:4px;
-  flex:0 1 auto;
+  flex:0 0 auto;
   min-width:0;
   flex-wrap:nowrap;
   overflow:visible;
@@ -219,7 +219,7 @@ body{
 
 .tab-add-btn:hover{
   /* background:rgb(23, 54, 100); */
-  background:rgba(100, 124, 146, 0.233);
+  background:rgba(100, 124, 146, 0.068);
 }
 
 .card-topbar{

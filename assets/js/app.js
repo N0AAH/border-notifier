@@ -518,8 +518,8 @@ function renderCard() {
       <div class="card-tabs">
         <div id="sortableTabs" class="tabs">
           ${renderTabsHtml()}
+          <button id="addWatcherBtn" class="tab-add-btn" title="Додати нову вкладку" type="button">+</button>
         </div>
-        <button id="addWatcherBtn" class="tab-add-btn" title="Додати нову вкладку" type="button">+</button>
       </div>
 
       <div class="card">
@@ -892,10 +892,15 @@ function initTabsSortable() {
     $tabs.sortable('destroy');
   }
 
+  const tabCount = $tabs.children('.tab-btn').length;
+  if (tabCount < 2) {
+    return;
+  }
+
   $tabs.sortable({
-    items: '.tab-btn',
+    items: '> .tab-btn',
     axis: 'x',
-    containment: '.card-tabs',
+    containment: 'parent',
     helper: function (_, item) {
       const { width, height } = item[0].getBoundingClientRect();
       return item.clone().css({
@@ -905,12 +910,12 @@ function initTabsSortable() {
         boxSizing: 'border-box',
       });
     },
-    appendTo: '.card-tabs',
+    appendTo: 'parent',
     tolerance: 'pointer',
     distance: 8,
     forcePlaceholderSize: true,
     placeholder: 'tab-sortable-placeholder',
-    cancel: '.tab-edit-btn, .tab-delete-btn, .tab-label-input',
+    cancel: '.tab-edit-btn, .tab-delete-btn, .tab-label-input, .tab-add-btn',
 
     start: function (_, ui) {
       ui.item.addClass('dragging');
@@ -941,7 +946,6 @@ function initTabsSortable() {
       renderApp();
     }
   });
-
 }
 
 document.addEventListener('DOMContentLoaded', () => {
